@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
+import { FileSpreadsheet, FileText, Plus, Search, Upload } from 'lucide-react'
 import logoImage from '../assets/logo-mbss.jpg'
 
 type DashboardView = 'dashboard' | 'import' | 'products' | 'history' | 'profile'
@@ -30,14 +31,15 @@ export default function EmployeeDashboard({ onLogout }: EmployeeDashboardProps) 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>('light')
   const [language, setLanguage] = useState<Language>('FR')
+  const [importStage, setImportStage] = useState<WorkflowStage>('import')
 
   const activePage = navigation.find((item) => item.id === activeView) ?? navigation[0]
   const text = language === 'FR' ? {
     logout: 'Déconnexion', welcome: 'Bienvenue dans votre espace de travail',
-    products: 'Produits & Prix', productHeaders: ['Référence', 'Désignation', 'Fournisseur', 'Prix', 'Stock'],
+    products: 'Produits & Prix', productHeaders: ['Référence', 'Désignation', 'Fournisseur', 'Prix'],
   } : {
     logout: 'Log Out', welcome: 'Welcome to your workspace',
-    products: 'Products & Prices', productHeaders: ['Reference', 'Description', 'Supplier', 'Price', 'Stock'],
+    products: 'Products & Prices', productHeaders: ['Reference', 'Description', 'Supplier', 'Price'],
   }
 
   return (
@@ -97,9 +99,9 @@ export default function EmployeeDashboard({ onLogout }: EmployeeDashboardProps) 
 
         <main className="mx-auto max-w-[1440px] p-5 sm:p-8 lg:p-9">
           {activeView === 'dashboard' && <DashboardHome onNavigate={setActiveView} language={language} />}
-          {activeView === 'import' && <ImportPreview language={language} />}
-          {activeView === 'products' && <SimpleTable title={text.products} headers={text.productHeaders} rows={[['FLT-MGO-008', 'Filtre MGO 8 microns', 'Marine Filtration', '28 500 XAF', 'En stock'], ['CLN-RAG-010', 'Chiffons coton blanc 10 kg', 'Douala Textiles', '19 200 XAF', 'En stock'], ['PPE-GLV-NL', 'Gants nitrile taille L', 'SafeWork CM', '1 350 XAF', 'Faible']]} />}
-          {activeView === 'history' && <RfqHistory language={language} onFinalize={() => setActiveView('import')} />}
+          {activeView === 'import' && <ImportPreview language={language} initialStage={importStage} />}
+          {activeView === 'products' && <ProductsAndPricing language={language} />}
+          {activeView === 'history' && <RfqHistory language={language} onFinalize={() => { setImportStage('results'); setActiveView('import') }} />}
           {activeView === 'profile' && <ProfilePreview theme={theme} setTheme={setTheme} />}
         </main>
       </div>
@@ -116,7 +118,7 @@ function DashboardHome({ onNavigate, language }: { onNavigate: (view: DashboardV
         {stats.map(([label, value, color, icon]) => <div className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" key={label}><div className="flex items-start justify-between"><p className="text-xs font-medium text-slate-400">{label}</p><span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-sm font-bold ${color}`}>{icon}</span></div><p className={`mt-3 text-3xl font-bold ${color}`}>{value}</p><p className="mt-1 text-[11px] text-slate-400">Mis à jour aujourd'hui</p></div>)}
       </div>
       <div className="mt-6 flex flex-wrap gap-3">
-        <button className="rounded-xl bg-[#36a445] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#36a445]/25 hover:bg-[#2d913b]" onClick={() => onNavigate('import')} type="button">＋ Importer une nouvelle RFQ</button>
+        <button className="rounded-xl bg-[#36a445] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#36a445]/25 hover:bg-[#2d913b]" onClick={() => { onNavigate('import'); }} type="button">＋ Importer une nouvelle RFQ</button>
         <button className="rounded-xl border border-[#cbd8f4] bg-white px-5 py-3 text-sm font-bold text-[#22439c]" onClick={() => onNavigate('history')} type="button">⇩ {language === 'FR' ? 'Consulter l’historique' : 'View RFQ history'}</button>
       </div>
       <section className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -142,8 +144,8 @@ const initialQuoteRows: QuoteRow[] = [
   { number: 5, code: '001345', description: 'PORK NECK BONELESS', unit: 'KGS', quantity: 40, unitPrice: 0, remarks: '', group: 'missing' },
 ]
 
-function ImportPreview({ language }: { language: Language }) {
-  const [stage, setStage] = useState<WorkflowStage>('import')
+function ImportPreview({ language, initialStage = 'import' }: { language: Language; initialStage?: WorkflowStage }) {
+  const [stage, setStage] = useState<WorkflowStage>(initialStage)
   const [rows, setRows] = useState(initialQuoteRows)
   const [selectedRows, setSelectedRows] = useState<number[]>(initialQuoteRows.map((row) => row.number))
   const [manualOpen, setManualOpen] = useState(false)
@@ -225,7 +227,7 @@ function FinalQuotation({ rows, subtotal, margin, marginMode, setMargin, setMarg
 
 function FinalActions({ onEmail, onDownload: _onDownload }: { onEmail: () => void; onDownload?: () => void }) { return <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-green-200 bg-green-50 p-5"><span className="mr-auto text-sm font-bold text-green-800">Cotation figée et prête à être livrée</span>{['Télécharger PDF', 'Télécharger Excel', 'Télécharger Word', 'Imprimer la fiche'].map((label) => <button className="rounded-lg border border-green-200 bg-white px-4 py-2 text-xs font-bold text-[#22439c]" onClick={() => { void _onDownload; console.log(label) }} type="button" key={label}>{label}</button>)}<button className="rounded-lg bg-[#36a445] px-4 py-2 text-xs font-bold text-white" onClick={onEmail} type="button">Envoyer par e-mail au client</button></section> }
 function EmailModal({ onClose }: { onClose: () => void }) { return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-5"><form className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onSubmit={(event) => { event.preventDefault(); console.log('Notification client envoyée'); onClose() }}><div className="flex items-center justify-between"><h2 className="text-lg font-bold text-[#22439c]">Envoyer la cotation au client</h2><button className="text-slate-400" onClick={onClose} type="button">×</button></div><label className="mt-5 block text-xs font-bold text-slate-600">Adresse du client<input className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3" type="email" defaultValue="client@example.com" required /></label><label className="mt-4 block text-xs font-bold text-slate-600">Objet<input className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3" defaultValue="Votre cotation finale - MV Coral VI" required /></label><label className="mt-4 block text-xs font-bold text-slate-600">Message<textarea className="mt-2 min-h-28 w-full rounded-lg border border-slate-200 p-3" defaultValue="Bonjour, veuillez trouver ci-joint votre cotation finale." /></label><div className="mt-5 flex justify-end gap-3"><button className="rounded-lg border border-slate-200 px-4 py-2 text-sm" onClick={onClose} type="button">Annuler</button><button className="rounded-lg bg-[#36a445] px-4 py-2 text-sm font-bold text-white" type="submit">Confirmer l'envoi</button></div></form></div> }
-type RfqHistoryRow = { reference: string; client: string; date: string; status: 'En cours' | 'Terminé' }
+type RfqHistoryRow = { reference: string; client: string; date: string; status: 'En cours' | 'En attente de validation' | 'Terminé' }
 const rfqHistoryRows: RfqHistoryRow[] = [
   { reference: 'RFQ-2026-00452', client: 'GloBeCo Ship Supply', date: '22/09/2026', status: 'En cours' },
   { reference: 'RFQ-2026-00448', client: 'Abidjan Marine Services', date: '21/09/2026', status: 'En cours' },
@@ -234,12 +236,240 @@ const rfqHistoryRows: RfqHistoryRow[] = [
 ]
 
 function RfqHistory({ language, onFinalize }: { language: Language; onFinalize: () => void }) {
+  const [rows, setRows] = useState<RfqHistoryRow[]>(rfqHistoryRows)
+  const [openDownload, setOpenDownload] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const isFrench = language === 'FR'
+
+  const handleSupplierImport = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0]
+    if (!selectedFile) return
+
+    const acceptedExtensions = ['.xlsx', '.xls', '.pdf', '.docx']
+    const fileName = selectedFile.name.toLowerCase()
+    const isSupportedFile = acceptedExtensions.some((extension) => fileName.endsWith(extension))
+
+    if (!isSupportedFile) {
+      window.alert(isFrench ? 'Format non pris en charge. Sélectionnez un fichier Excel, PDF ou Word.' : 'Unsupported format. Please select an Excel, PDF or Word file.')
+      event.target.value = ''
+      return
+    }
+
+    const now = new Date()
+    const importedReference = `RFQ-IMPORT-${now.getTime()}`
+    const importedRow: RfqHistoryRow = {
+      reference: importedReference,
+      client: selectedFile.name.replace(/\.[^/.]+$/, '') || 'Fournisseur importé',
+      date: now.toLocaleDateString('fr-FR'),
+      status: 'En attente de validation',
+    }
+
+    setRows((currentRows) => [
+      importedRow,
+      ...currentRows.map((row) => (row.status === 'En cours' ? { ...row, status: 'En attente de validation' as const } : row)),
+    ])
+    event.target.value = ''
+  }
+
+  return (
+    <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="font-bold text-slate-700">{isFrench ? 'Consulter l’historique des RFQ' : 'View RFQ History'}</h2>
+          <p className="mt-1 text-xs text-slate-400">{isFrench ? 'Suivez les demandes en cours et téléchargez les cotations terminées.' : 'Track ongoing requests and download completed quotations.'}</p>
+        </div>
+
+        <button
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#36a445] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#36a445]/25 transition hover:bg-[#2e8b3a]"
+          onClick={() => fileInputRef.current?.click()}
+          type="button"
+        >
+          <Upload className="h-4 w-4" aria-hidden="true" />
+          {isFrench ? 'Importer un fichier fournisseur' : 'Import supplier file'}
+        </button>
+        <input ref={fileInputRef} accept=".xlsx,.xls,.pdf,.docx" className="hidden" onChange={handleSupplierImport} type="file" />
+      </div>
+
+      <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+        <thead>
+          <tr>
+            {(isFrench ? ['RÉFÉRENCE', 'CLIENT', 'DATE', 'ÉTAT', 'ACTIONS'] : ['REFERENCE', 'CLIENT', 'DATE', 'STATUS', 'ACTIONS']).map((heading) => <th className="border border-slate-300 bg-slate-50 p-3 font-bold text-slate-500" key={heading}>{heading}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr className="transition hover:bg-slate-50" key={row.reference}>
+              <td className="border border-slate-200 p-3 font-semibold text-[#22439c]">{row.reference}</td>
+              <td className="border border-slate-200 p-3">{row.client}</td>
+              <td className="border border-slate-200 p-3">{row.date}</td>
+              <td className="border border-slate-200 p-3">
+                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${row.status === 'En attente de validation' ? 'bg-orange-50 text-orange-600' : row.status === 'En cours' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
+                  {isFrench ? row.status : row.status === 'En cours' ? 'In progress' : row.status === 'En attente de validation' ? 'Awaiting validation' : 'Completed'}
+                </span>
+              </td>
+              <td className="relative border border-slate-200 p-3">
+                {row.status === 'En cours' || row.status === 'En attente de validation' ? (
+                  <button className="rounded-lg bg-[#36a445] px-3 py-2 text-[11px] font-bold text-white hover:bg-[#2e8b3a]" onClick={onFinalize} type="button">
+                    {row.status === 'En attente de validation' ? (isFrench ? 'Continuer' : 'Continue') : (isFrench ? 'Finaliser la demande' : 'Finalize Request')}
+                  </button>
+                ) : (
+                  <div className="relative inline-block">
+                    <button className="rounded-lg border border-[#cbd8f4] bg-white px-3 py-2 text-[11px] font-bold text-[#22439c]" onClick={() => setOpenDownload(openDownload === row.reference ? null : row.reference)} type="button">⇩ {isFrench ? 'Télécharger' : 'Download'} ▾</button>
+                    {openDownload === row.reference && <div className="absolute right-0 z-10 mt-2 w-36 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"><button className="block w-full rounded-lg px-2 py-2 text-left text-[11px] text-slate-600 hover:bg-slate-50" type="button">PDF</button><button className="block w-full rounded-lg px-2 py-2 text-left text-[11px] text-slate-600 hover:bg-slate-50" type="button">Excel</button><button className="block w-full rounded-lg px-2 py-2 text-left text-[11px] text-slate-600 hover:bg-slate-50" type="button">Word</button></div>}
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+export function LegacyRfqHistory({ language, onFinalize }: { language: Language; onFinalize: () => void }) {
   const [openDownload, setOpenDownload] = useState<string | null>(null)
   const isFrench = language === 'FR'
   return <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-5"><h2 className="font-bold text-slate-700">{isFrench ? 'Consulter l’historique des RFQ' : 'View RFQ History'}</h2><p className="mt-1 text-xs text-slate-400">{isFrench ? 'Suivez les demandes en cours et téléchargez les cotations terminées.' : 'Track ongoing requests and download completed quotations.'}</p></div><table className="w-full min-w-[760px] border-collapse text-left text-xs"><thead><tr>{(isFrench ? ['RÉFÉRENCE', 'CLIENT', 'DATE', 'ÉTAT', 'ACTIONS'] : ['REFERENCE', 'CLIENT', 'DATE', 'STATUS', 'ACTIONS']).map((heading) => <th className="border border-slate-300 bg-slate-50 p-3 font-bold text-slate-500" key={heading}>{heading}</th>)}</tr></thead><tbody>{rfqHistoryRows.map((row) => <tr className="transition hover:bg-slate-50" key={row.reference}><td className="border border-slate-200 p-3 font-semibold text-[#22439c]">{row.reference}</td><td className="border border-slate-200 p-3">{row.client}</td><td className="border border-slate-200 p-3">{row.date}</td><td className="border border-slate-200 p-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ${row.status === 'En cours' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>{isFrench ? row.status : row.status === 'En cours' ? 'In progress' : 'Completed'}</span></td><td className="relative border border-slate-200 p-3">{row.status === 'En cours' ? <button className="rounded-lg bg-[#36a445] px-3 py-2 text-[11px] font-bold text-white" onClick={onFinalize} type="button">{isFrench ? 'Finaliser la demande' : 'Finalize Request'}</button> : <div className="relative inline-block"><button className="rounded-lg border border-[#cbd8f4] bg-white px-3 py-2 text-[11px] font-bold text-[#22439c]" onClick={() => setOpenDownload(openDownload === row.reference ? null : row.reference)} type="button">⇩ {isFrench ? 'Télécharger' : 'Download'} ▾</button>{openDownload === row.reference && <div className="absolute right-0 z-10 mt-2 w-32 rounded-lg border border-slate-200 bg-white p-1 shadow-xl"><button className="block w-full rounded px-3 py-2 text-left text-xs hover:bg-slate-50" type="button">▣ PDF</button><button className="block w-full rounded px-3 py-2 text-left text-xs hover:bg-slate-50" type="button">▤ Excel</button><button className="block w-full rounded px-3 py-2 text-left text-xs hover:bg-slate-50" type="button">▤ Word</button></div>}</div>}</td></tr>)}</tbody></table></section>
 }
 function ProfilePreview({ theme, setTheme }: { theme: Theme; setTheme: (theme: Theme) => void }) { return <div className="grid gap-6 xl:grid-cols-2"><section className="rounded-2xl bg-[#111e57] p-6 text-white xl:col-span-2"><div className="flex flex-wrap items-center gap-5"><div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#36a445] text-2xl font-bold">JT</div><div><h2 className="text-2xl font-bold">Jean Tabi</h2><p className="text-sm text-blue-100/70">jean.tabi@mbss-sarl.cm · Service Ventes · Douala, Bonantone</p></div></div></section><section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 font-bold">Changer mon mot de passe</h2><div className="space-y-4"><input className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm" type="password" placeholder="Mot de passe actuel" /><input className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm" type="password" placeholder="Nouveau mot de passe" /><button className="h-12 w-full rounded-xl bg-[#36a445] text-sm font-bold text-white" type="button">Mettre à jour le mot de passe</button></div></section><section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 font-bold">Préférences d'affichage</h2><div className="grid grid-cols-2 gap-3"><button className={`rounded-xl p-5 text-left text-sm font-bold transition ${theme === 'light' ? 'border-2 border-[#36a445] text-[#22439c]' : 'border border-slate-200 text-slate-400'}`} onClick={() => setTheme('light')} type="button">☀ Mode clair{theme === 'light' && ' · actif'}</button><button className={`rounded-xl p-5 text-left text-sm transition ${theme === 'dark' ? 'border-2 border-[#36a445] bg-slate-900 font-bold text-white' : 'border border-slate-200 text-slate-500'}`} onClick={() => setTheme('dark')} type="button">☾ Mode sombre{theme === 'dark' && ' · actif'}</button></div></section></div> }
-function SimpleTable({ title, headers, rows }: { title: string; headers: string[]; rows: string[][] }) { return <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 font-bold">{title}</h2><Table headers={headers} rows={rows} /></section> }
+
+type ProductRow = { reference: string; designation: string; supplier: string; price: string }
+
+const initialProducts: ProductRow[] = [
+  { reference: 'FLT-MGO-008', designation: 'Filtre MGO 8 microns', supplier: 'Marine Filtration', price: '28 500 XAF' },
+  { reference: 'CLN-RAG-010', designation: 'Chiffons coton blanc 10 kg', supplier: 'Douala Textiles', price: '19 200 XAF' },
+  { reference: 'PPE-GLV-NL', designation: 'Gants nitrile taille L', supplier: 'SafeWork CM', price: '1 350 XAF' },
+]
+
+function ProductsAndPricing({ language }: { language: Language }) {
+  const [products, setProducts] = useState<ProductRow[]>(initialProducts)
+  const [draftFilters, setDraftFilters] = useState({ designation: '', reference: '', supplier: '' })
+  const [appliedFilters, setAppliedFilters] = useState(draftFilters)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
+  const [fileFormat, setFileFormat] = useState<'docx' | 'pdf' | 'xlsx' | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const isFrench = language === 'FR'
+
+  const filteredProducts = products.filter((product) => {
+    const matches = (value: string, filter: string) => value.toLowerCase().includes(filter.trim().toLowerCase())
+    return matches(product.designation, appliedFilters.designation) && matches(product.reference, appliedFilters.reference) && matches(product.supplier, appliedFilters.supplier)
+  })
+
+  const updateFilter = (key: keyof typeof draftFilters, value: string) => {
+    setDraftFilters((current) => ({ ...current, [key]: value }))
+  }
+
+  const submitFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setAppliedFilters(draftFilters)
+  }
+
+  const openFilePicker = (format: 'docx' | 'pdf' | 'xlsx') => {
+    setFileFormat(format)
+    setAddMenuOpen(false)
+    window.setTimeout(() => fileInputRef.current?.click(), 0)
+  }
+
+  const handleProductFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !fileFormat) return
+
+    const importedProduct: ProductRow = {
+      reference: `IMP-${Date.now()}`,
+      designation: file.name.replace(/\.[^/.]+$/, '') || 'Article importé',
+      supplier: 'Fournisseur importé',
+      price: 'À définir',
+    }
+    setProducts((current) => [importedProduct, ...current])
+    setFileFormat(null)
+    event.target.value = ''
+  }
+
+  const saveManualProduct = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    setProducts((current) => [
+      {
+        reference: String(form.get('reference') || '').trim(),
+        designation: String(form.get('designation') || '').trim(),
+        supplier: String(form.get('supplier') || '').trim(),
+        price: `${String(form.get('price') || '').trim()} XAF`,
+      },
+      ...current,
+    ])
+    setManualOpen(false)
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="font-bold text-slate-700">{isFrench ? 'Produits & Prix' : 'Products & Prices'}</h2>
+          <p className="mt-1 text-xs text-slate-400">{isFrench ? 'Les articles sont achetés après validation de la commande.' : 'Items are purchased after order validation.'}</p>
+        </div>
+
+        <div className="relative">
+          <button className="inline-flex items-center gap-2 rounded-xl bg-[#36a445] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#36a445]/25 hover:bg-[#2e8b3a]" onClick={() => setAddMenuOpen((current) => !current)} type="button">
+            <Plus className="h-4 w-4" />
+            {isFrench ? 'Ajouter un article' : 'Add an article'}
+          </button>
+          {addMenuOpen && (
+            <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+              <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => { setManualOpen(true); setAddMenuOpen(false) }} type="button">
+                <FileText className="h-4 w-4 text-[#22439c]" />
+                {isFrench ? 'Saisie manuelle' : 'Manual entry'}
+              </button>
+              <div className="border-t border-slate-100 px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-wide text-slate-400">{isFrench ? 'Par fichier' : 'By file'}</div>
+              {([
+                ['docx', 'Word (.docx)'],
+                ['pdf', 'PDF (.pdf)'],
+                ['xlsx', 'Excel (.xlsx)'],
+              ] as const).map(([format, label]) => (
+                <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" key={format} onClick={() => openFilePicker(format)} type="button">
+                  <FileSpreadsheet className="h-4 w-4 text-[#36a445]" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <input ref={fileInputRef} accept={fileFormat === 'docx' ? '.docx' : fileFormat === 'pdf' ? '.pdf' : '.xlsx'} className="hidden" onChange={handleProductFile} type="file" />
+        </div>
+      </div>
+
+      <form className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 xl:grid-cols-[1.2fr_1fr_1.2fr_auto]" onSubmit={submitFilters}>
+        {([
+          ['designation', isFrench ? 'Nom de l’article' : 'Article name'],
+          ['reference', isFrench ? 'Référence' : 'Reference'],
+          ['supplier', isFrench ? 'Fournisseur' : 'Supplier'],
+        ] as const).map(([key, placeholder]) => (
+          <label className="relative block" key={key}>
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#36a445] focus:ring-4 focus:ring-[#36a445]/10" value={draftFilters[key]} onChange={(event) => updateFilter(key, event.target.value)} placeholder={placeholder} />
+          </label>
+        ))}
+        <button className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#36a445] px-5 text-sm font-bold text-white hover:bg-[#2e8b3a]" type="submit">
+          <Search className="h-4 w-4" />
+          {isFrench ? 'Rechercher' : 'Search'}
+        </button>
+      </form>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+          <thead><tr>{(isFrench ? ['RÉFÉRENCE', 'DÉSIGNATION', 'FOURNISSEUR', 'PRIX'] : ['REFERENCE', 'DESCRIPTION', 'SUPPLIER', 'PRICE']).map((heading) => <th className="border border-slate-300 bg-slate-50 p-3 font-bold text-slate-500" key={heading}>{heading}</th>)}</tr></thead>
+          <tbody>
+            {filteredProducts.map((product) => <tr className="transition hover:bg-slate-50" key={product.reference}><td className="border border-slate-200 p-4 font-semibold text-[#22439c]">{product.reference}</td><td className="border border-slate-200 p-4">{product.designation}</td><td className="border border-slate-200 p-4">{product.supplier}</td><td className="border border-slate-200 p-4 font-semibold text-slate-700">{product.price}</td></tr>)}
+            {filteredProducts.length === 0 && <tr><td className="border border-slate-200 p-6 text-center text-sm text-slate-400" colSpan={4}>{isFrench ? 'Aucun article trouvé.' : 'No item found.'}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {manualOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-5"><form className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onSubmit={saveManualProduct}><div className="flex items-center justify-between"><h3 className="text-lg font-bold text-[#22439c]">{isFrench ? 'Ajouter un article' : 'Add an article'}</h3><button className="text-xl text-slate-400" onClick={() => setManualOpen(false)} type="button">×</button></div><div className="mt-5 grid gap-3"><input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" name="reference" placeholder={isFrench ? 'Référence' : 'Reference'} required /><input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" name="designation" placeholder={isFrench ? 'Désignation' : 'Description'} required /><input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" name="supplier" placeholder={isFrench ? 'Fournisseur' : 'Supplier'} required /><input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" name="price" min="0" placeholder={isFrench ? 'Prix en XAF' : 'Price in XAF'} required type="number" /></div><button className="mt-5 w-full rounded-xl bg-[#36a445] py-3 text-sm font-bold text-white hover:bg-[#2e8b3a]" type="submit">{isFrench ? 'Enregistrer' : 'Save'}</button></form></div>}
+    </section>
+  )
+}
+
 function Table({ headers, rows }: { headers: string[]; rows: string[][] }) { return <table className="w-full min-w-[650px] border-collapse text-left text-xs"><thead><tr>{headers.map((header) => <th className="border border-slate-300 bg-slate-50 p-3 font-bold uppercase text-slate-500" key={header}>{header}</th>)}</tr></thead><tbody>{rows.map((row) => <tr className="transition hover:bg-slate-50" key={row[0]}>{row.map((cell, index) => <td className="border border-slate-200 p-3" key={`${row[0]}-${cell}`}>{index === row.length - 1 ? <StatusBadge value={cell} /> : cell}</td>)}</tr>)}</tbody></table> }
 function StatusBadge({ value }: { value: string }) {
   const style = value.includes('envoyé') || value.includes('stock') ? 'bg-green-50 text-green-700' : value.includes('traitement') || value.includes('cours') ? 'bg-blue-50 text-[#22439c]' : value.includes('vérifier') || value.includes('Faible') ? 'bg-amber-50 text-amber-700' : value.includes('trouvé') ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'
