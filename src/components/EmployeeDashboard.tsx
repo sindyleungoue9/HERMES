@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+import { useMutation, useQuery } from 'convex/react'
+import { api } from '../../convex/_generated/api'
 import logoImage from '../assets/logo-mbss.jpg'
 
 type DashboardView = 'dashboard' | 'import' | 'products' | 'history' | 'profile'
@@ -108,6 +110,10 @@ export default function EmployeeDashboard({ onLogout }: EmployeeDashboardProps) 
 }
 
 function DashboardHome({ onNavigate, language }: { onNavigate: (view: DashboardView) => void; language: Language }) {
+  const rfqs = useQuery(api.rfqs.listRecent)
+  const rows = rfqs?.length
+    ? rfqs.map((rfq) => [rfq.reference, rfq.client, rfq.vessel, String(rfq.articleCount), translateRfqStatus(rfq.status, language)])
+    : rfqRows
   const stats = [['Mes RFQ', '24', 'text-[#22439c]', '↗'], ['À traiter', '5', 'text-amber-500', '◷'], ['En attente de prix', '3', 'text-slate-800', '◇'], ['Devis envoyés', '18', 'text-[#36a445]', '✓']]
 
   return (
@@ -121,7 +127,7 @@ function DashboardHome({ onNavigate, language }: { onNavigate: (view: DashboardV
       </div>
       <section className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-4"><div><h2 className="font-bold text-slate-700">{language === 'FR' ? 'RFQ qui me sont assignées' : 'RFQs assigned to me'}</h2><p className="mt-1 text-xs text-slate-400">{language === 'FR' ? 'Les dernières demandes à suivre' : 'Latest requests to follow'}</p></div><button className="text-xs font-bold text-[#22439c]" onClick={() => onNavigate('history')} type="button">{language === 'FR' ? 'Voir tout' : 'View all'} →</button></div>
-        <Table headers={['Référence', 'Client', 'Navire', 'Articles', 'Statut']} rows={rfqRows} />
+        <Table headers={['Référence', 'Client', 'Navire', 'Articles', 'Statut']} rows={rows} />
       </section>
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><h2 className="font-bold text-slate-700">Activité de la semaine</h2><span className="text-xs text-slate-400">7 derniers jours</span></div><div className="flex h-32 items-end justify-around gap-3 pt-6">{[35, 60, 28, 78, 48, 65, 22].map((height, index) => <div className={`w-9 rounded-t-md transition hover:opacity-80 ${index === 3 ? 'bg-[#36a445]' : index === 1 || index === 5 ? 'bg-[#22439c]' : 'bg-[#c8d9f6]'}`} style={{ height: `${height}%` }} key={`${height}-${index}`} />)}</div><div className="mt-2 flex justify-around text-[10px] text-slate-400"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div></section>
@@ -129,6 +135,14 @@ function DashboardHome({ onNavigate, language }: { onNavigate: (view: DashboardV
       </div>
     </>
   )
+}
+
+function translateRfqStatus(status: 'processing' | 'to_review' | 'not_found' | 'sent', language: Language) {
+  const labels = {
+    FR: { processing: 'En traitement', to_review: 'À vérifier', not_found: 'Non trouvé', sent: 'Devis envoyé' },
+    EN: { processing: 'Processing', to_review: 'To review', not_found: 'Not found', sent: 'Quote sent' },
+  }
+  return labels[language][status]
 }
 
 type WorkflowStage = 'import' | 'processing' | 'results' | 'final' | 'validated'
@@ -143,6 +157,7 @@ const initialQuoteRows: QuoteRow[] = [
 ]
 
 function ImportPreview({ language }: { language: Language }) {
+  const createRfq = useMutation(api.rfqs.create)
   const [stage, setStage] = useState<WorkflowStage>('import')
   const [rows, setRows] = useState(initialQuoteRows)
   const [selectedRows, setSelectedRows] = useState<number[]>(initialQuoteRows.map((row) => row.number))
@@ -163,7 +178,16 @@ function ImportPreview({ language }: { language: Language }) {
   }, [stage])
 
   function startProcessing(file?: File) {
-    if (file) setFileName(file.name)
+    if (file) {
+      setFileName(file.name)
+      void createRfq({
+        reference: `RFQ-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`,
+        client: file.name.replace(/\.[^/.]+$/, '') || 'Import local',
+        vessel: 'À préciser',
+        articleCount: 0,
+        status: 'processing',
+      })
+    }
     setStage('processing')
   }
 
